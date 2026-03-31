@@ -1,4 +1,9 @@
 fastapi
-twilio
-uvicorn
+uvicorn[standard]
 pydantic
+pydantic-settings
+sqlalchemy
+psycopg[binary]
+alembic
+twilio
+python-dotenv
