@@ -1,8 +1,12 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.schemas.lead import LeadCreate
+from app.services.lead_service import LeadService
 
 app = FastAPI(title="LeadLamp API")
+lead_service = LeadService()
 
 
 @app.get("/")
@@ -10,10 +14,21 @@ def read_root():
     return {"status": "online", "message": "LeadLamp Middleware is active"}
 
 
-# POST with a Pydantic parameter: FastAPI reads the JSON body, validates it,
-# and passes a LeadCreate instance to your function (or returns 422 if invalid).
+# POST with dependency injection:
+# - FastAPI validates JSON into LeadCreate.
+# - FastAPI injects a DB Session via get_db().
 @app.post("/leads/")
-async def create_lead(lead: LeadCreate):
-    # model_dump() turns the model into a plain dict (good for logging, APIs, DB layers).
-    print(lead.model_dump())
-    return {"message": "Lead received", "phone_number": lead.phone_number}
+def create_lead(lead: LeadCreate, db: Session = Depends(get_db)):
+    # Delegate persistence logic to service layer.
+    created = lead_service.create_lead(db=db, lead_in=lead)
+
+    # Return JSON-safe fields for quick testing/inspection.
+    return {
+        "id": str(created.id),
+        "phone_number": created.phone_number,
+        "first_name": created.first_name,
+        "last_name": created.last_name,
+        "query": created.query,
+        "status": created.status,
+        "created_at": created.created_at.isoformat(),
+    }
