@@ -11,13 +11,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
 
-from app.core.config import settings
+if TYPE_CHECKING:
+    # TYPE_CHECKING avoids any runtime import cycle; only type checkers resolve this.
+    from app.core.config import Settings
 
-# Module-level logger: log messages are tagged with this name in the output.
 logger = logging.getLogger(__name__)
 
 
@@ -27,9 +29,17 @@ class NotificationService:
 
     We keep a single Twilio Client on the instance so we do not rebuild
     HTTP client state for every text (cheaper and simpler).
+
+    WHY inject Settings in __init__ (Inversion of Control / testability):
+    - The service does not reach for a global `settings` object at import time.
+    - In unit tests you pass a fake or minimal Settings instance without
+      touching environment variables or the real Twilio account.
+    - Production wiring (e.g. FastAPI Depends) constructs the service once
+      with the validated app settings.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
         # Client is synchronous; we wrap calls in asyncio.to_thread in async methods
         # so FastAPI's event loop is not blocked while waiting on Twilio's API.
         self._client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
@@ -39,11 +49,11 @@ class NotificationService:
         Perform the blocking Twilio REST call.
 
         Returns the Twilio Message SID (string) on success.
-        The parameter is named `from_` because `from` is a Python keyword.
+        The Twilio parameter is named `from_` because `from` is a Python keyword.
         """
         message = self._client.messages.create(
             to=to_number,
-            from_=settings.twilio_from_number,
+            from_=self._settings.twilio_from_number,
             body=body,
         )
         return message.sid

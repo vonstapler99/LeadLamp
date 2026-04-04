@@ -5,7 +5,12 @@ Pydantic models describe "what valid JSON looks like" before your route logic ru
 FastAPI uses them to parse incoming HTTP JSON into normal Python objects.
 """
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.lead import LeadStatus
 
 
 class LeadCreate(BaseModel):
@@ -14,6 +19,9 @@ class LeadCreate(BaseModel):
 
     Fields with a default (like None) are optional in the JSON body.
     Fields without a default (phone_number) are required.
+
+    Status is not part of the create payload: the server owns initial state
+    (typically LeadStatus.PENDING) until notifications or retries run.
     """
 
     # Required: every lead must identify how to reach the customer.
@@ -31,3 +39,23 @@ class LeadCreate(BaseModel):
         default=None,
         description="What the customer needs fixed or quoted.",
     )
+
+
+class LeadRead(BaseModel):
+    """
+    Shape returned to clients after a lead is created or fetched.
+
+    WHY status uses LeadStatus here too:
+    - Same Enum as the ORM: API responses only advertise valid states.
+    - FastAPI / OpenAPI document allowed values for clients and tools.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    phone_number: str
+    first_name: str | None
+    last_name: str | None
+    query: str | None
+    status: LeadStatus
+    created_at: datetime
