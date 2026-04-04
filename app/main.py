@@ -1,9 +1,19 @@
+import logging
+
 from fastapi import Depends, FastAPI
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.schemas.lead import LeadCreate
 from app.services.lead_service import LeadService
+
+# Basic logging so modules like notification_service can emit INFO/ERROR
+# and you see them in the terminal while developing (uvicorn).
+# In production you typically configure logging via dictConfig / your host's setup.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s %(name)s %(message)s",
+)
 
 app = FastAPI(title="LeadLamp API")
 lead_service = LeadService()
