@@ -6,13 +6,33 @@ It is used by SQLAlchemy and Alembic (for migrations).
 """
 
 from datetime import datetime, timezone
+from enum import Enum
 import uuid
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, Enum as SAEnum, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+
+
+class LeadStatus(str, Enum):
+    """
+    Allowed lifecycle states for a lead (notification / routing pipeline).
+
+    WHY a Python Enum (single source of truth):
+    - The same names are enforced in ORM, API schemas, and business logic — no
+      "magic strings" scattered as 'PENDING' vs 'pending' vs typos.
+    - State-machine rules later (e.g. only NOTIFIED -> FAILED) can be written
+      against these members, which IDEs and type checkers understand.
+
+    We subclass str so each member's value is a plain string in JSON and in
+    the database when stored as VARCHAR (e.g. 'PENDING').
+    """
+
+    PENDING = "PENDING"
+    NOTIFIED = "NOTIFIED"
+    FAILED = "FAILED"
 
 
 class Lead(Base):
@@ -49,8 +69,17 @@ class Lead(Base):
     # Optional query.
     query: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Status starts as PENDING unless explicitly provided.
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING")
+    # Pipeline state: Enum in Python, still stored as strings in PostgreSQL.
+    #
+    # WHY native_enum=False:
+    # - Keeps using a VARCHAR-style column, without
+    #   introducing a separate PostgreSQL ENUM type
+    # - Values in the DB remain 'PENDING', 'NOTIFIED', 'FAILED' as text.
+    status: Mapped[LeadStatus] = mapped_column(
+        SAEnum(LeadStatus, native_enum=False, length=50),
+        nullable=False,
+        default=LeadStatus.PENDING,
+    )
 
     # UTC timestamp for when the row is created.
     # We use a callable so the current time is evaluated per row insert.
